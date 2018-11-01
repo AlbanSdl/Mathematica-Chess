@@ -28,12 +28,13 @@ chessboard= {
 (* 0 is White, 1 is Black, -1 is undefined *)
 getColor[x_String:"\[WhitePawn]"]:= If[("\[WhiteKing]" == x || "\[WhiteQueen]" == x || "\[WhiteKnight]" == x|| "\[WhiteBishop]" == x|| "\[WhiteRook]" == x|| "\[WhitePawn]" == x), 0, If[("\[BlackKing]" == x || "\[BlackQueen]" == x || "\[BlackKnight]" == x|| "\[BlackBishop]" == x|| "\[BlackRook]" == x|| "\[BlackPawn]" == x), 1, -1]]
 
-(* this function is not finished at all !!! *)
+(* This function will return True if the king of the given color is threat, False instead
+The color MUST be given in the binary format, corresponding to the output of the method getColor[str] *)
 isUnderAttack[color_] := (
-	Table[Table[If[chessboard[[j, i, 1]] == "\[WhiteKing]" || chessboard[[j, i, 1]] == "\[BlackKing]" && getColor[chessboard[[j, i, 1]]] == color, (king = chessboard[[j, i]])], {i, 1, Length[chessboard[[j]]]}], {j, 1, Length[chessboard]}];
-	(* The following line is really crashy ! *)
-	Table[Table[If[Length[Intersection[If[!getMovePossibilities[chessboard[[j, i]]], {}, getMovePossibilities[chessboard[[j, i]]]],  {king[[2]]}]] =!= 0, Return[True]], {i, 1, Length[chessboard[[j]]]}], {j, 1, Length[chessboard]}];
-	Return[False]
+	Table[Table[If[chessboard[[j, i, 1]] == "\[WhiteKing]" || chessboard[[j, i, 1]] == "\[BlackKing]" && getColor[chessboard[[j, i, 1]]] == color, king = chessboard[[j, i]]], {i, 1, Length[chessboard[[j]]]}], {j, 1, Length[chessboard]}];
+	result = False;
+	Table[Table[If[chessboard[[j, i, 1]] =!= 0 && Length[Intersection[getMovePossibilities[chessboard[[j, i]]], {king[[2]]}]] =!= 0, result=True;Return[True]], {i, 1, Length[chessboard[[j]]]}], {j, 1, Length[chessboard]}];
+	Return[result]
 )
 
 
@@ -74,9 +75,9 @@ movePawn[pawn_, x_, y_, forceEating_]:=(
 	If[getColor[pawn[[1]]]==0, (* Checks if the pawn is white *)
 		(
 			If[!forceEating && y + 1 <= Length[chessboard] && getColor[ToString[chessboard[[y+1, x, 1]]]] == -1, AppendTo[list, {x, y+1}]] ; (* Adds the first move to the list *)
-			If[forceEating || (x =!= Length[chessboard]&& getColor[chessboard[[y+1, x+1, 1]]] == 1), AppendTo[list, {x+1, y+1}]];
-			If[forceEating || (x =!= 1 && getColor[chessboard[[y+1, x-1, 1]]] == 1), AppendTo[list, {x-1, y+1}]];
-			If[!forceEating && pawn[[3]] == False &&  getColor[chessboard[[y+2, x, 1]]] =!= getColor[pawn[[1]]] && getColor[ToString[chessboard[[y+2, x, 1]]]] == -1, (* Adds another possibility if the pawn moves for the first time *)
+			If[x =!= Length[chessboard] && y + 1 <= Length[chessboard] && (forceEating || getColor[chessboard[[y+1, x+1, 1]]] == 1), AppendTo[list, {x+1, y+1}]];
+			If[x =!= 1 && y + 1 <= Length[chessboard] && (forceEating || getColor[chessboard[[y+1, x-1, 1]]] == 1), AppendTo[list, {x-1, y+1}]];
+			If[!forceEating && pawn[[3]] == False && y + 2 <= Length[chessboard] &&  getColor[chessboard[[y+2, x, 1]]] =!= getColor[pawn[[1]]] && getColor[ToString[chessboard[[y+2, x, 1]]]] == -1, (* Adds another possibility if the pawn moves for the first time *)
 				AppendTo[list, {x, y+2}]
 			]
 		),
@@ -84,9 +85,9 @@ movePawn[pawn_, x_, y_, forceEating_]:=(
 		(* Now, let's take a look at the black pawn ... *)
 		(
 			If[!forceEating && 0 < y - 1 <= Length[chessboard] &&  getColor[ToString[chessboard[[y-1, x, 1]]]] == -1, AppendTo[list, {x, y-1}]] ; (* Adds the first move to the list *)
-			If[forceEating || (x =!= Length[chessboard]&& getColor[chessboard[[y-1, x+1, 1]]] == 0), AppendTo[list, {x+1, y-1}]];
-			If[forceEating || (x =!= 1 &&getColor[chessboard[[y-1, x-1, 1]]] == 0), AppendTo[list, {x-1, y-1}]];
-			If[!forceEating && pawn[[3]] == False &&  getColor[chessboard[[y - 2, x, 1]]] =!= getColor[pawn[[1]]] && getColor[ToString[chessboard[[y-2, x, 1]]]] == -1, (* Adds another possibility if the pawn moves for the first time *)
+			If[0 < y - 1 <= Length[chessboard] && x =!= Length[chessboard] && (forceEating || getColor[chessboard[[y-1, x+1, 1]]] == 0), AppendTo[list, {x+1, y-1}]];
+			If[0 < y - 1 <= Length[chessboard] && x =!= 1 && (forceEating || getColor[chessboard[[y-1, x-1, 1]]] == 0), AppendTo[list, {x-1, y-1}]];
+			If[!forceEating && 0 < y - 1 <= Length[chessboard] && pawn[[3]] == False && getColor[chessboard[[y - 2, x, 1]]] =!= getColor[pawn[[1]]] && getColor[ToString[chessboard[[y-2, x, 1]]]] == -1, (* Adds another possibility if the pawn moves for the first time *)
 				AppendTo[list, {x, y-2}]
 			]
 		)
@@ -180,13 +181,18 @@ moveQueen[queen_, x_, y_] := (
 (*Rendering*)
 
 
-(*Rendering...*)
+(* Defining dynamic variables which are displayed *)
 inputCache = {};
 Dynamic[inputCache]
 roundNumber = 1;
 Dynamic[roundNumber]
 moveList = {};
 Dynamic[moveList]
+checkWhite = False;
+checkBlack = False;
+Dynamic[checkWhite]
+Dynamic[checkBlack]
+
 Board=Dynamic[Table[Mouseover[{If[Divisible[i+j,2],Brown,White],Rectangle[{i,j},{i+1,j+1}]},{If[MemberQ[moveList,{i+1,j+1}],Green,Red],Rectangle[{i,j},{i+1,j+1}]}],{i,0,7},{j,0,7}]];
 Pieces=Dynamic[
 	Table[
@@ -200,7 +206,7 @@ ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({
 
 	(* Current Player *)
 	playerColor = If[EvenQ[roundNumber], 1, 0];
-
+	
 	(* Moves pieces *)
 	If[Length[inputCache] == 0 && getColor[chessboard[[Ceiling[#][[2]], Ceiling[#][[1]], 1]]] =!= playerColor, Return[False]];
 	AppendTo[inputCache, Ceiling[#]];
@@ -214,10 +220,19 @@ ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({
 			moveList = {};
 			Return[False]
 		)];
-		If[finalizeMove[inputCache[[1]], inputCache[[2]]], roundNumber++];
+		If[finalizeMove[inputCache[[1]], inputCache[[2]]], 
+			roundNumber++;
+			If[isUnderAttack[If[EvenQ[roundNumber], 1, 0]], 
+				If[playerColor == 0, (* Color are reversed because the chosen argument (here) is playerColor and not*)
+					checkBlack = True; Print["Check ! Black player, protect your king !"],
+					checkWhite = True; Print["Check ! White player, protect your king !"]];
+				If[playerColor == 0, checkBlack = False, checkWhite = False]
+			]
+		];
 
 		moveList = {};
 		inputCache = {};
+		
 	})]
 
 (* Now checking chessmate *)
