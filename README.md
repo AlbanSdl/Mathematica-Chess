@@ -9,7 +9,6 @@ But we'll continue to create, develop and improve the game to something great we
 
 ## What's next ? ##
 Now, we'd like to add more content and fix bugs. Here is the list of we'll do as soon as possible:
-- Add and finish Checkmate
 - Finish promotion system
 - Add a timer for movements
 - Improve UI by adding a way to know which player has to play

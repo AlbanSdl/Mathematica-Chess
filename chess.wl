@@ -251,6 +251,9 @@ getCastlingLocations[piece_] := (
 
 
 (* Defining dynamic variables which are displayed *)
+(* Determines if the game is running or not *)
+running = True;
+Dynamic[running];
 inputCache = {};
 Dynamic[inputCache]
 roundNumber = 1;
@@ -271,7 +274,7 @@ Pieces=Dynamic[
 		] &/@chessboard[[z]],{z,1,Length[chessboard]}
 	]
 ];
-ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({
+ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({If[running, {
 
 	(* Current Player *)
 	playerColor = If[EvenQ[roundNumber], 1, 0];
@@ -281,7 +284,7 @@ ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({
 	AppendTo[inputCache, Ceiling[#]];
 	If[Length[inputCache] == 1, (
 		moveList = getMovePossibilities[chessboard[[inputCache[[1, 2]], inputCache[[1, 1]]]]];
-	)]
+	)];
 	(* Checking if list's length is \[GreaterEqual] 2 *)
 	If[Length[inputCache] >= 2, ({
 		If[inputCache[[1]] == inputCache[[2]], (
@@ -291,10 +294,61 @@ ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({
 		)];
 		If[finalizeMove[inputCache[[1]], inputCache[[2]]], 
 			roundNumber++;
-			If[isCheck[If[EvenQ[roundNumber], 1, 0]], 
+			
+			(* Checking Check *)
+			If[isCheck[If[EvenQ[roundNumber], 1, 0]], (
 				If[playerColor == 0, (* Color are reversed because the chosen argument (here) is playerColor and not*)
 					checkBlack = True; Print["Check ! Black player, protect your king !"],
 					checkWhite = True; Print["Check ! White player, protect your king !"]];
+				
+				(* Now checking checkmate *)
+				Table[Table[If[chessboard[[j, i, 1]] == "\[WhiteKing]" || chessboard[[j, i, 1]] == "\[BlackKing]" && getColor[chessboard[[j, i, 1]]] =!= playerColor, king = chessboard[[j, i]]], {i, 1, Length[chessboard[[j]]]}], {j, 1, Length[chessboard]}];
+				(* Stops the game if no such king is found *)
+				If[king == Null, running=False;Print["No such king detected... Stopping the game, please restart the package to continue."]];
+				posList = getMovePossibilities[king];
+				(* Already done in getMovePossibilities[] ! Optimisation
+				Table[Table[If[chessboard\[LeftDoubleBracket]j, i, 1\[RightDoubleBracket] =!= 0 && getColor[chessboard\[LeftDoubleBracket]j, i, 1\[RightDoubleBracket]] =!= getColor[king[[1]]], (
+					posList = Complement[posList, Intersection[getMovePossibilities[chessboard\[LeftDoubleBracket]j, i\[RightDoubleBracket]], getMovePossibilities[king]]]
+				)], {i, 1, Length[chessboard\[LeftDoubleBracket]j\[RightDoubleBracket]]}], {j, 1, Length[chessboard]}]; *)
+				If[Length[posList] == 0, (
+					(* There is check and the king can't move *)
+					locs = {};
+					(* Adding all the locations where pieces can go, in order to cancel the check *)
+					Table[Table[If[MemberQ[getMovePossibilities[chessboard[[j, i]]], king[[2]]], (
+						dtLocs = {};
+						AppendTo[dtLocs, chessboard[[j, i, 2]]];
+						(* adds all the locations between the king and the ennemy *)
+						ennemyLocs = getMovePossibilities[chessboard[[j, i]]];
+						ennemyLocs = Complement[ennemyLocs, {king[[2]]}]; (* removing king location *)
+						diff = {Sign[chessboard[[j, i, 2, 1]] - king[[2, 1]]], Sign[chessboard[[j, i, 2, 2]] - king[[2, 2]]]};
+						(* If the location where the ennemy can go is in the same direction as the king, it's added in dtLocs *)
+						Table[If[Sign[ennemyLocs[[i, 1]] - king[[2, 1]]] == diff[[1]] && Sign[ennemyLocs[[i, 2]] - king[[2, 2]]] == diff[[1]], AppendTo[dtLocs, ennemyLocs[[i]]]], {i, 1, Length[ennemyLocs]}];
+						(* Adding all the locs IN A LIST to locs *)
+						AppendTo[locs, dtLocs];
+					)], {i, 1, Length[chessboard[[j]]]}], {j, 1, Length[chessboard]}];
+					
+					(* Now, in each list contained in locs, at least one location must be reached in order to cancel the check *)
+					confirmedCheck = False;
+					Table[(
+						If[confirmedCheck, Return[True]];
+						localCheck = True;
+						(* Browsing the Chess in order to find pieces of the same color as the king which can cancel the Check *)
+						Table[(
+							If[!localCheck, Return[False]];
+							Table[(
+								If[getColor[chessboard[[j, i, 1]]] == getColor[king[[1]]] && Length[Intersection[getMovePossibilities[chessboard[[j, i]]], locs[[k]]]] =!= 0, localCheck = False; Return[False]]
+							), {i, 1, Length[chessboard[[1]]]}]
+						), {j, 1, Length[chessboard]}];
+						confirmedCheck = confirmedCheck || localCheck;
+						
+					), {k, 1, Length[locs]}];
+					
+					If[confirmedCheck, (
+						Print["Checkmate ! Player ", If[getColor[king[[1]]] == 0, "black", "white"], " won !"];
+						running = False
+					)]
+				)]),
+				(* else clause *)
 				If[playerColor == 0, checkBlack = False, checkWhite = False]
 			]
 		];
@@ -304,20 +358,7 @@ ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({
 		
 	})]
 
-(* Now checking checkmate *)
-(* Table[Table[If[chessboard\[LeftDoubleBracket]j, i, 1\[RightDoubleBracket] \[Equal] "\[WhiteKing]" || chessboard\[LeftDoubleBracket]j, i, 1\[RightDoubleBracket] \[Equal] "\[BlackKing]", king = chessboard\[LeftDoubleBracket]j\[RightDoubleBracket], i\[RightDoubleBracket]], {i, 1, Length[chessboard\[LeftDoubleBracket]j\[RightDoubleBracket]]}], {j, 1, Length[chessboard]}];
-posList = getMovePossibilities[king];
-AppendTo[posList, king\[LeftDoubleBracket]2\[RightDoubleBracket]];
-Table[Table[DeleteCases[posList, Alternatives @@ Intersection[getMovePossibilities[chessboard\[LeftDoubleBracket]j, i\[RightDoubleBracket]], getMovePossibilities[king]]], {i, 1, Length[chessboard\[LeftDoubleBracket]j\[RightDoubleBracket]]}], {j, 1, Length[chessboard]}]
-If[Length[posList] \[Equal] 0, (
-locs = {};
-Table[Table[If[MemberQ[getMovePossibilities[chessboard\[LeftDoubleBracket]j, i\[RightDoubleBracket]], king\[LeftDoubleBracket]2\[RightDoubleBracket]], (
-AppendTo[locs, chessboard\[LeftDoubleBracket]j, i, 2\[RightDoubleBracket]];
-(* @asdl il faut rajouter les endroits entre les pions et le roi ennemi *)
-)], {i, 1, Length[chessboard\[LeftDoubleBracket]j\[RightDoubleBracket]]}], {j, 1, Length[chessboard]}];
-)];*)
-
-})&]
+}] (* End of is running check *)})&]
 
 
 
