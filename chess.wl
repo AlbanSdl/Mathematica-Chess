@@ -112,12 +112,21 @@ finalizeMove[oldPosition_, newPosition_]:=(
 				)];
 				chessboard[[oldPosition[[2]], oldPosition[[1]]]] = {0, chessboard[[oldPosition[[2]], oldPosition[[1]], 2]]};
 				chessboard[[newPosition[[2]], newPosition[[1]]]] = {0, chessboard[[newPosition[[2]], newPosition[[1]], 2]]};
+				latestMoveInfo = {0, {0, 0}, {0, 0}};
 				Return[True]
 			), (
+				(* En passant pawn deletion *)
+				If[getType[chessboard[[oldPosition[[2]], oldPosition[[1]], 1]]] == 0  && getType[latestMoveInfo[[1]]] == 0 && getColor[latestMoveInfo[[1]]] =!= getColor[chessboard[[oldPosition[[2]], oldPosition[[1]], 1]]] 
+					&& Abs[latestMoveInfo[[2, 2]] - latestMoveInfo[[3, 2]]] == 2 && oldPosition[[2]] == latestMoveInfo[[3, 2]] && (oldPosition[[1]] == latestMoveInfo[[3, 1]] + 1 || oldPosition[[1]] == latestMoveInfo[[3, 1]] - 1), (
+					If[getType[chessboard[[newPosition[[2]], newPosition[[1]], 1]]] == -1 && newPosition == {latestMoveInfo[[3, 1]], latestMoveInfo[[3, 2]] + If[getColor[latestMoveInfo[[1]]] == 0, -1, 1]},
+						chessboard[[latestMoveInfo[[3, 2]], latestMoveInfo[[3, 1]]]] = {0, latestMoveInfo[[3]]};
+					]
+				)];
 				(* Normal moves *)
 				chessboard[[newPosition[[2]], newPosition[[1]]]] = {chessboard[[oldPosition[[2]], oldPosition[[1]], 1]], newPosition, True};
 				chessboard[[oldPosition[[2]], oldPosition[[1]]]] = {0, chessboard[[oldPosition[[2]], oldPosition[[1]], 2]]};
 				promotePawn[chessboard[[newPosition[[2]], newPosition[[1]]]], newPosition[[1]], newPosition[[2]]];
+				latestMoveInfo = {chessboard[[newPosition[[2]], newPosition[[1]], 1]], oldPosition, newPosition};
 				Return[True];
 			)];
 		), (Return[False])]
@@ -125,6 +134,7 @@ finalizeMove[oldPosition_, newPosition_]:=(
 	Return[False]]
 )
 
+(* Returns a list of all the locations where the given pawn can go *)
 movePawn[pawn_, x_, y_, forceEating_]:=(
 	list = {}; (* The list containing all the possible moves *)
 	If[getColor[pawn[[1]]]==0, (* Checks if the pawn is white *)
@@ -147,9 +157,15 @@ movePawn[pawn_, x_, y_, forceEating_]:=(
 			]
 		)
 	];
+	
+	(* En passant detection*)
+	If[getType[latestMoveInfo[[1]]] == 0 && getColor[latestMoveInfo[[1]]] =!= getColor[pawn[[1]]] && Abs[latestMoveInfo[[2, 2]] - latestMoveInfo[[3, 2]]] == 2 && y == latestMoveInfo[[3, 2]] && (x == latestMoveInfo[[3, 1]] + 1 || x == latestMoveInfo[[3, 1]] - 1), (
+		AppendTo[list, {latestMoveInfo[[3, 1]], latestMoveInfo[[3, 2]] + If[getColor[latestMoveInfo[[1]]] == 0, -1, 1]}]
+	)];
 	Return[list]
 )
 
+(* Returns a list of all the locations where the given king can move *)
 moveKing[king_, x_, y_, ignoreOthers_:False]:=(
 	list={{x+1, y+1}, {x+1, y}, {x+1, y-1}, {x, y+1}, {x, y-1}, {x-1, y + 1}, {x-1, y}, {x-1, y-1}};
 	nlist = {};
@@ -221,6 +237,7 @@ moveRook[rook_,x_,y_, ignoreOthers_:False]:=(
 	Return[If[ignoreOthers, list, Join[list, getCastlingLocations[rook]]]]
 )
 
+(* Returns a list of all the locations where the queen can move *)
 moveQueen[queen_, x_, y_] := (
 	Return[Join[moveBishop[queen, x, y], moveRook[queen, x, y]]]
 )
@@ -269,9 +286,7 @@ getCastlingLocations[piece_] := (
 )
 
 (* Here is the promotion : when a pawn reaches the opposite side of the board, he becomes another piece (rook, knight, bishop or queen)
-<---->
-This function MUST be called in finalizeMove[], NOT IN getMovePossibilities[]
-*)
+This function MUST be called in finalizeMove[], NOT IN getMovePossibilities[] *)
 promotePawn[pawn_, x_, y_] := (
 
 	(* This function can only be called from promotePawn[...] context *)
@@ -302,22 +317,38 @@ promotePawn[pawn_, x_, y_] := (
 (*Rendering*)
 
 
-(* Defining dynamic variables which are displayed *)
+(*** Most of the following values are dynamic for a debug purpose ***)
+
 (* Determines if the game is running or not *)
-(*** Most of values are dynamic for a debug purpose ***)
 running = True;
+
+(* A list which keeps the latest click position (converted in location in chessboard *)
 inputCache = {};
 Dynamic[inputCache]
+
+(* The number of the round. If the round number is even, black player has to play *)
 roundNumber = 1;
 Dynamic[roundNumber]
+
+(* This list contains all the locations where the selected piece can go. It's used in order to color locations in green with mouseover*)
 moveList = {};
 Dynamic[moveList]
+
+(* All the following values are cache for check (True if check) *)
 checkWhite = False;
 checkBlack = False;
 Dynamic[checkWhite]
 Dynamic[checkBlack]
 
+(* The latest move information :
+the first element of the list is the piece (as string),
+the second is the old position,
+the third is the new position *)
+latestMoveInfo = {0, {0, 0}, {0, 0}};
+
+(* The board is brown and white and updated each time the list used in mouseover changes *)
 Board=Dynamic[Table[Mouseover[{If[Divisible[i+j,2],Brown,White],Rectangle[{i,j},{i+1,j+1}]},{If[MemberQ[moveList,{i+1,j+1}],Green,Red],Rectangle[{i,j},{i+1,j+1}]}],{i,0,7},{j,0,7}]];
+(* The 'pieces' variable represents all the pieces which are drawn on the board, depending on the matrix 'chessboard' *)
 Pieces=Dynamic[
 	Table[
 		If[#[[1]] =!= 0,
@@ -326,6 +357,8 @@ Pieces=Dynamic[
 		] &/@chessboard[[z]],{z,1,Length[chessboard]}
 	]
 ];
+(* The clickpane detects all the clicks and will convert the coordinates to locations in the matrix 'chessboard'. All the methods are called from here 
+The variable running defined above, will stop the clickpane detection is set to False *)
 ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({If[running, {
 
 	(* Current Player *)
@@ -414,6 +447,7 @@ ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({If[running
 			]
 		];
 
+		(* Move complete, cleaning cache and lists *)
 		moveList = {};
 		inputCache = {};
 		
