@@ -28,19 +28,47 @@ chessboard= {
 (* 0 is White, 1 is Black, -1 is undefined *)
 getColor[x_String:"\[WhitePawn]"]:= If[("\[WhiteKing]" == x || "\[WhiteQueen]" == x || "\[WhiteKnight]" == x|| "\[WhiteBishop]" == x|| "\[WhiteRook]" == x|| "\[WhitePawn]" == x), 0, If[("\[BlackKing]" == x || "\[BlackQueen]" == x || "\[BlackKnight]" == x|| "\[BlackBishop]" == x|| "\[BlackRook]" == x|| "\[BlackPawn]" == x), 1, -1]]
 
+(* Returns an Integer, corresponding to the piece's type:
+	-1 is undefined (empty location)
+	0 is a pawn
+	1 is a rook
+	2 is a knight
+	3 is a bishop
+	4 is a queen
+	5 is a king
+*)
+getType[piece:0]:= Return[-1]
+getType[piece:"\[WhitePawn]"|"\[BlackPawn]"]:= Return[0]
+getType[piece:"\[WhiteRook]"|"\[BlackRook]"]:= Return[1]
+getType[piece:"\[WhiteKnight]"|"\[BlackKnight]"]:= Return[2]
+getType[piece:"\[WhiteBishop]"|"\[BlackBishop]"]:= Return[3]
+getType[piece:"\[WhiteQueen]"|"\[BlackQueen]"]:= Return[4]
+getType[piece:"\[WhiteKing]"|"\[BlackKing]"]:= Return[5]
+
 (* This function will return True if the king of the given color is threat, False instead.
 Note: This funtion will return True if no such king is found.
 The color MUST be given in the binary format, corresponding to the output of the method getColor[str] *)
 isCheck[color_] := (
-	Table[Table[If[chessboard[[j, i, 1]] == "\[WhiteKing]" || chessboard[[j, i, 1]] == "\[BlackKing]" && getColor[chessboard[[j, i, 1]]] == color, king = chessboard[[j, i]]], {i, 1, Length[chessboard[[j]]]}], {j, 1, Length[chessboard]}];
+	chessboardForEach[Function[chessboardPiece, (
+		If[chessboardPiece[[1]] == "\[WhiteKing]" || chessboardPiece[[1]] == "\[BlackKing]" && getColor[chessboardPiece[[1]]] == color, king = chessboardPiece]
+	)]];
 	If[king =!= Null, Return[isUnderAttack[king]], Return[True]]
 )
 
 (* This function will return True if the given is attacked by another one (ennemy), False instead *)
 isUnderAttack[piece_] := (
 	result = False;
-	Table[Table[If[chessboard[[j, i, 1]] =!= 0 && getColor[piece[[1]]] =!= getColor[chessboard[[j, i, 1]]] && Length[Intersection[getMovePossibilities[chessboard[[j, i]]], {piece[[2]]}]] =!= 0, result=True; Return[True]], {i, 1, Length[chessboard[[j]]]}], {j, 1, Length[chessboard]}];
+	chessboardForEach[Function[chessboardPiece, (
+		If[chessboardPiece[[1]] =!= 0 && getColor[piece[[1]]] =!= getColor[chessboardPiece[[1]]] && Length[Intersection[getMovePossibilities[chessboardPiece], {piece[[2]]}]] =!= 0, result=True; Return[True]]
+	)]];
 	Return[result]
+)
+
+(* This function Iterates the whole chessboard
+function is a Function (can be Pure Function) which takes a whole piece as argument e.g: {"\[WhiteKing]", {0, 0}, False} *)
+chessboardForEach[function_] := (
+	chList = Flatten[chessboard, 1];
+	Table[function[chList[[i]]], {i, 1, Length[chList]}]
 )
 
 
@@ -57,6 +85,7 @@ getMovePossibilities[{queen:"\[WhiteQueen]"|"\[BlackQueen]", {x_, y_}, moved_:Tr
 getMovePossibilities[{king:"\[WhiteKing]"|"\[BlackKing]", {x_, y_}, moved_:True|False}, ignoreOthers_:False, eating_:False]:= Return[Select[moveKing[{king,{x,y}, moved},x,y, ignoreOthers], isPlacementAllowed[#,getColor[king],{king, {x, y}, moved}]&]]
 getMovePossibilities[{piece: 0, {x_, y_}, moved_:False}, ignoreOthers_:False, eating_:False] := Return[{}]
 
+(* Checks if the move is allowed for the given piece *)
 isPlacementAllowed[location_, color_, piece_]:=(
 	If[location ==  piece[[2]], Return[False]];
 	If[!(tests = 0 < location[[1]] <= Length[chessboard] && 0 < location[[2]] <= Length[chessboard[[location[[1]]]]]), Return[False]];
@@ -72,6 +101,7 @@ finalizeMove[oldPosition_, newPosition_]:=(
 		If[MemberQ[getMovePossibilities[chessboard[[oldPosition[[2]], oldPosition[[1]]]]], newPosition], (
 			(* Checking castlings *)
 			If[MemberQ[getCastlingLocations[chessboard[[oldPosition[[2]], oldPosition[[1]]]]], newPosition], (
+				(* As getType[] is a function, it's considered as too long to execute and will not return the rookX value on time. So we prefer using the old way to check *)
 				If[chessboard[[oldPosition[[2]], oldPosition[[1]], 1]] == "\[WhiteKing]" || chessboard[[oldPosition[[2]], oldPosition[[1]], 1]] == "\[BlackKing]", rookX = newPosition[[1]], rookX = oldPosition[[1]]];
 				If[rookX == 1, ( (* Queen side castling *)
 					chessboard[[oldPosition[[2]], 4]] = {chessboard[[oldPosition[[2]], 1, 1]], chessboard[[oldPosition[[2]], 4, 2]], True};
@@ -87,6 +117,7 @@ finalizeMove[oldPosition_, newPosition_]:=(
 				(* Normal moves *)
 				chessboard[[newPosition[[2]], newPosition[[1]]]] = {chessboard[[oldPosition[[2]], oldPosition[[1]], 1]], newPosition, True};
 				chessboard[[oldPosition[[2]], oldPosition[[1]]]] = {0, chessboard[[oldPosition[[2]], oldPosition[[1]], 2]]};
+				promotePawn[chessboard[[newPosition[[2]], newPosition[[1]]]], newPosition[[1]], newPosition[[2]]];
 				Return[True];
 			)];
 		), (Return[False])]
@@ -125,13 +156,9 @@ moveKing[king_, x_, y_, ignoreOthers_:False]:=(
 	Table[If[isPlacementAllowed[list[[i]], getColor[king[[1]]], king], AppendTo[nlist, list[[i]]]], {i, 1, Length[list]}];
 	ennemies = {};
 	If[!ignoreOthers, (
-		Table[
-			Table[
-				If[getColor[chessboard[[j, i, 1]]] =!= getColor[king[[1]]] && getColor[ToString[chessboard[[j, i, 1]]]] =!= -1 && chessboard[[j, i, 1]] =!= "\[BlackKing]" && chessboard[[j, i, 1]] =!= "\[WhiteKing]" , AppendTo[ennemies, chessboard[[j, i]]]], 
-				{j, 1, Length[chessboard[[i]]]}],
-			{i, 1, Length[chessboard]}
-		];
-		Table[nlist = Complement[nlist, getMovePossibilities[ennemies[[i]], True, True]], {i, 1, Length[ennemies]}];
+		chessboardForEach[Function[chessboardPiece, (
+			If[getColor[chessboardPiece[[1]]] =!= getColor[king[[1]]] && getColor[ToString[chessboardPiece[[1]]]] =!= -1 && getType[chessboardPiece[[1]]] =!= 5, nlist = Complement[nlist, getMovePossibilities[chessboardPiece, True, True]]]
+		)]];
 	)];
 	Return[If[ignoreOthers, nlist, Join[nlist, getCastlingLocations[king]]]]
 )
@@ -207,30 +234,30 @@ moveQueen[queen_, x_, y_] := (
 Piece can be a Rook or King !
 You can add the locations returned by this function with an Intersection, directly in the moveRook and moveKing methods *)
 getCastlingLocations[piece_] := (
-	If[piece[[1]] == "\[WhiteKing]" || piece[[1]] == "\[BlackKing]" || piece[[1]] == "\[WhiteRook]" || piece[[1]] == "\[BlackRook]", (
+	If[piece[[1]] =!= 0 && getType[piece[[1]]] == 5 || getType[piece[[1]]] == 1, (
 		(* The piece is a rook or a king *)
 		If[BooleanQ[piece[[3]]] && !piece[[3]], (
 			(* The piece has never moved *)
 			If[piece[[2, 1]] == 1, (
-				If[(chessboard[[piece[[2, 2]], 5, 1]] == "\[WhiteKing]" || chessboard[[piece[[2, 2]], 5, 1]] == "\[BlackKing]") && chessboard[[piece[[2, 2]], 5, 3]] == False, (
+				If[getType[chessboard[[piece[[2, 2]], 5, 1]]] == 5 && chessboard[[piece[[2, 2]], 5, 3]] == False, (
 					auth = True;
 					Table[If[chessboard[[piece[[2, 2]], i, 1]] =!= 0 || isUnderAttack[chessboard[[piece[[2, 2]], i]], True], auth = False], {i, 2, 4}];
 					If[auth, Return[{{5, piece[[2, 2]]}}], Return[{}]]
 				), Return[{}]]
 			), If[piece[[2, 1]] == Length[chessboard], (
-				If[(chessboard[[piece[[2, 2]], 5, 1]] == "\[WhiteKing]" || chessboard[[piece[[2, 2]], 5, 1]] == "\[BlackKing]") && chessboard[[piece[[2, 2]], 5, 3]] == False, (
+				If[getType[chessboard[[piece[[2, 2]], 5, 1]]] == 5 && chessboard[[piece[[2, 2]], 5, 3]] == False, (
 					auth = True;
 					Table[If[chessboard[[piece[[2, 2]], Length[chessboard] - i, 1]] =!= 0 || isUnderAttack[chessboard[[piece[[2, 2]], Length[chessboard] - i]], True], auth = False], {i, 1, 2}];
 					If[auth, Return[{{5, piece[[2, 2]]}}], Return[{}]]
 				), Return[{}]]
 			), (
 				resultList = {};
-				If[(chessboard[[piece[[2, 2]], 1, 1]] == "\[WhiteRook]" || chessboard[[piece[[2, 2]], 1, 1]] == "\[BlackRook]") && chessboard[[piece[[2, 2]], 1, 3]] == False, (
+				If[getType[chessboard[[piece[[2, 2]], 1, 1]]] == 1 && Length[chessboard[[piece[[2, 2]], 1]]] >= 3 && chessboard[[piece[[2, 2]], 1, 3]] == False, (
 					auth = True;
 					Table[If[chessboard[[piece[[2, 2]], i, 1]] =!= 0 || isUnderAttack[chessboard[[piece[[2, 2]], i]], True], auth = False], {i, 2, 4}];
 					If[auth, AppendTo[resultList, {1, piece[[2, 2]]}]]
 				)];
-				If[(chessboard[[piece[[2, 2]], Length[chessboard], 1]] == "\[WhiteRook]" || chessboard[[piece[[2, 2]], Length[chessboard], 1]] == "\[BlackRook]") && chessboard[[piece[[2, 2]], Length[chessboard], 3]] == False, (
+				If[getType[chessboard[[piece[[2, 2]], Length[chessboard], 1]]] == 1 && Length[chessboard[[piece[[2, 2]], Length[chessboard]]]] >= 3 && chessboard[[piece[[2, 2]], Length[chessboard], 3]] == False, (
 					auth = True;
 					Table[If[chessboard[[piece[[2, 2]], Length[chessboard] - i, 1]] =!= 0 || isUnderAttack[chessboard[[piece[[2, 2]], Length[chessboard] - i]], True], auth = False], {i, 1, 2}];
 					If[auth, AppendTo[resultList, {Length[chessboard], piece[[2, 2]]}]]
@@ -241,9 +268,34 @@ getCastlingLocations[piece_] := (
 	), Return[{}]]
 )
 
-(* Promotion goes here. 
+(* Here is the promotion : when a pawn reaches the opposite side of the board, he becomes another piece (rook, knight, bishop or queen)
 <---->
+This function MUST be called in finalizeMove[], NOT IN getMovePossibilities[]
 *)
+promotePawn[pawn_, x_, y_] := (
+
+	(* This function can only be called from promotePawn[...] context *)
+	endPromotion[value_] := (
+		If[value =!= Null && value =!= $Failed && value =!= $Canceled, chessboard[[y, x, 1]] = value]
+	);
+
+	(* Checks whether the pawn is at a side of the board (and its color) or not *)
+	If[getType[pawn[[1]]] =!= Null && getType[pawn[[1]]] == 0 && ((getColor[pawn[[1]]] == 1 && y == 1) || (getColor[pawn[[1]]] == 0 && y == Length[chessboard])), (
+		val = "";
+		If[getColor[pawn[[1]]] == 0, optionList = {"\[WhiteRook]","\[WhiteKnight]","\[WhiteBishop]","\[WhiteQueen]"}, optionList = {"\[BlackRook]","\[BlackKnight]","\[BlackBishop]","\[BlackQueen]"}];
+		CreateDialog[{
+			TextCell["Please select your pawn's promotion :", "Text",  CellMargins-> {{10,10}, {5, 10}}],
+			Column[{
+				Row[{
+					ActionMenu["Promotion",{optionList[[1]]:>(val=optionList[[1]]; ), optionList[[2]]:>(val=optionList[[2]];), optionList[[3]]:>(val=optionList[[3]];), optionList[[4]]:>(val=optionList[[4]];)}],
+					Dynamic[TextCell[val, "Subtitle"]]
+				}],
+				Button["Ok", (endPromotion[val];DialogReturn[]), Enabled->Dynamic[val =!= ""], Alignment->Center, Method->"Queued", ImageMargins->{{0,0},{5,0}}]
+			}]
+		}, Modal->True, WindowTitle-> "Pawn promotion", WindowFrameElements-> Null
+		];
+	)];
+)
 
 
 (* ::Section:: *)
@@ -252,8 +304,8 @@ getCastlingLocations[piece_] := (
 
 (* Defining dynamic variables which are displayed *)
 (* Determines if the game is running or not *)
+(*** Most of values are dynamic for a debug purpose ***)
 running = True;
-Dynamic[running];
 inputCache = {};
 Dynamic[inputCache]
 roundNumber = 1;
@@ -302,31 +354,30 @@ ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({If[running
 					checkWhite = True; Print["Check ! White player, protect your king !"]];
 				
 				(* Now checking checkmate *)
-				Table[Table[If[chessboard[[j, i, 1]] == "\[WhiteKing]" || chessboard[[j, i, 1]] == "\[BlackKing]" && getColor[chessboard[[j, i, 1]]] =!= playerColor, king = chessboard[[j, i]]], {i, 1, Length[chessboard[[j]]]}], {j, 1, Length[chessboard]}];
+				chessboardForEach[Function[chessboardPiece, (
+					If[getType[chessboardPiece[[1]]] == 5 && getColor[chessboardPiece[[1]]] =!= playerColor, king = chessboardPiece]
+				)]];
 				(* Stops the game if no such king is found *)
 				If[king == Null, running=False;Print["No such king detected... Stopping the game, please restart the package to continue."]];
 				posList = getMovePossibilities[king];
-				(* Already done in getMovePossibilities[] ! Optimisation
-				Table[Table[If[chessboard\[LeftDoubleBracket]j, i, 1\[RightDoubleBracket] =!= 0 && getColor[chessboard\[LeftDoubleBracket]j, i, 1\[RightDoubleBracket]] =!= getColor[king[[1]]], (
-					posList = Complement[posList, Intersection[getMovePossibilities[chessboard\[LeftDoubleBracket]j, i\[RightDoubleBracket]], getMovePossibilities[king]]]
-				)], {i, 1, Length[chessboard\[LeftDoubleBracket]j\[RightDoubleBracket]]}], {j, 1, Length[chessboard]}]; *)
 				If[Length[posList] == 0, (
 					(* There is check and the king can't move *)
 					locs = {};
 					(* Adding all the locations where pieces can go, in order to cancel the check *)
-					Table[Table[If[MemberQ[getMovePossibilities[chessboard[[j, i]]], king[[2]]], (
-						dtLocs = {};
-						AppendTo[dtLocs, chessboard[[j, i, 2]]];
-						(* adds all the locations between the king and the ennemy *)
-						ennemyLocs = getMovePossibilities[chessboard[[j, i]]];
-						ennemyLocs = Complement[ennemyLocs, {king[[2]]}]; (* removing king location *)
-						diff = {Sign[chessboard[[j, i, 2, 1]] - king[[2, 1]]], Sign[chessboard[[j, i, 2, 2]] - king[[2, 2]]]};
-						(* If the location where the ennemy can go is in the same direction as the king, it's added in dtLocs *)
-						Table[If[Sign[ennemyLocs[[i, 1]] - king[[2, 1]]] == diff[[1]] && Sign[ennemyLocs[[i, 2]] - king[[2, 2]]] == diff[[1]], AppendTo[dtLocs, ennemyLocs[[i]]]], {i, 1, Length[ennemyLocs]}];
-						(* Adding all the locs IN A LIST to locs *)
-						AppendTo[locs, dtLocs];
-					)], {i, 1, Length[chessboard[[j]]]}], {j, 1, Length[chessboard]}];
-					
+					chessboardForEach[Function[chessboardPiece, (
+						If[MemberQ[getMovePossibilities[chessboardPiece], king[[2]]] && getColor[chessboardPiece[[1]]] == If[EvenQ[roundNumber], 1, 0], (
+							dtLocs = {};
+							AppendTo[dtLocs, chessboardPiece[[2]]];
+							(* adds all the locations between the king and the ennemy *)
+							ennemyLocs = getMovePossibilities[chessboardPiece];
+							ennemyLocs = Complement[ennemyLocs, {king[[2]]}]; (* removing king location *)
+							diff = {Sign[chessboardPiece[[2, 1]] - king[[2, 1]]], Sign[chessboardPiece[[2, 2]] - king[[2, 2]]]};
+							(* If the location where the ennemy can go is in the same direction as the king, it's added in dtLocs *)
+							Table[If[Sign[ennemyLocs[[i, 1]] - king[[2, 1]]] == diff[[1]] && Sign[ennemyLocs[[i, 2]] - king[[2, 2]]] == diff[[1]], AppendTo[dtLocs, ennemyLocs[[i]]]], {i, 1, Length[ennemyLocs]}];
+							(* Adding all the locs IN A LIST to locs *)
+							AppendTo[locs, dtLocs];
+						)]
+					)]];
 					(* Now, in each list contained in locs, at least one location must be reached in order to cancel the check *)
 					confirmedCheck = False;
 					Table[(
@@ -346,10 +397,20 @@ ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({If[running
 					If[confirmedCheck, (
 						Print["Checkmate ! Player ", If[getColor[king[[1]]] == 0, "black", "white"], " won !"];
 						running = False
-					)]
+					)];
+					
 				)]),
 				(* else clause *)
-				If[playerColor == 0, checkBlack = False, checkWhite = False]
+				(
+					If[playerColor == 0, checkBlack = False, checkWhite = False];
+					
+					(* Checking if next player can move = StaleMate *)
+					chessList = Flatten[chessboard, 1];
+					isStaleMate = True;
+					Table[If[getColor[chessList[[i, 1]]] == If[EvenQ[roundNumber], 1, 0], If[Length[getMovePossibilities[chessList[[i]]]] =!= 0, isStaleMate=False;Return[True]]], {i, 1, Length[chessList]}];
+					If[isStaleMate, running = False; Print["StaleMate: Player can't move anymore, the game is draw !"]]
+				)
+				
 			]
 		];
 
