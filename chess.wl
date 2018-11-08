@@ -25,8 +25,13 @@ chessboard= {
 	{{"\[BlackRook]",{1,8},False},{"\[BlackKnight]",{2,8},False},{"\[BlackBishop]",{3,8},False},{"\[BlackQueen]",{4,8},False},{"\[BlackKing]",{5,8},False},{"\[BlackBishop]",{6,8},False},{"\[BlackKnight]",{7,8},False},{"\[BlackRook]",{8,8},False}}
 };
 
-(* 0 is White, 1 is Black, -1 is undefined *)
+(* This method returns the color of the piece :
+	0 is White,
+	1 is Black,
+	-1 is undefined
+The proper method requires a string (piece char) in order to work. The second method manages the 0 arg and returns -1 (undefined) *)
 getColor[x_String:"\[WhitePawn]"]:= If[("\[WhiteKing]" == x || "\[WhiteQueen]" == x || "\[WhiteKnight]" == x|| "\[WhiteBishop]" == x|| "\[WhiteRook]" == x|| "\[WhitePawn]" == x), 0, If[("\[BlackKing]" == x || "\[BlackQueen]" == x || "\[BlackKnight]" == x|| "\[BlackBishop]" == x|| "\[BlackRook]" == x|| "\[BlackPawn]" == x), 1, -1]]
+getColor[x_Integer]:=Return[-1]
 
 (* Returns an Integer, corresponding to the piece's type:
 	-1 is undefined (empty location)
@@ -55,11 +60,13 @@ isCheck[color_] := (
 	If[king =!= Null, Return[isUnderAttack[king]], Return[True]]
 )
 
-(* This function will return True if the given is attacked by another one (ennemy), False instead *)
-isUnderAttack[piece_] := (
+(* This function will return True if the given is attacked by another one (ennemy), False instead
+Please, provide colorUnchecked if the given position has no piece, in order to determine which color has to be checked *)
+isUnderAttack[piece_, colorUnchecked_:0] := (
 	result = False;
+	If[getColor[piece[[1]]] =!= -1, cU = getColor[piece[[1]]], cU = colorUnchecked];
 	chessboardForEach[Function[chessboardPiece, (
-		If[chessboardPiece[[1]] =!= 0 && getColor[piece[[1]]] =!= getColor[chessboardPiece[[1]]] && Length[Intersection[getMovePossibilities[chessboardPiece], {piece[[2]]}]] =!= 0, result=True; Return[True]]
+		If[chessboardPiece[[1]] =!= 0 && cU =!= getColor[chessboardPiece[[1]]] && Length[Intersection[getMovePossibilities[chessboardPiece, True, True], {piece[[2]]}]] =!= 0, result=True; Return[True]]
 	)]];
 	Return[result]
 )
@@ -88,9 +95,14 @@ getMovePossibilities[{piece: 0, {x_, y_}, moved_:False}, ignoreOthers_:False, ea
 (* Checks if the move is allowed for the given piece *)
 isPlacementAllowed[location_, color_, piece_]:=(
 	If[location ==  piece[[2]], Return[False]];
-	If[!(tests = 0 < location[[1]] <= Length[chessboard] && 0 < location[[2]] <= Length[chessboard[[location[[1]]]]]), Return[False]];
-	If[MemberQ[getCastlingLocations[piece], location], Return[True]];
-	If[ToString[chessboard[[location[[2]], location[[1]], 1]]] =!= ToString[0],tests = tests && getColor[chessboard[[location[[2]], location[[1]], 1]]] =!= color];
+	If[!(tests = 0 < location[[2]] <= Length[chessboard] && 0 < location[[1]] <= Length[chessboard[[location[[2]]]]]), Return[False]];
+	(* Checking castling WITHOUT getCastlingLocations[] to prevent infinite recursion *)
+	If[Length[piece] >= 3 && !piece[[3]]
+		&& MemberQ[{1, 5}, getType[chessboard[[location[[2]], location[[1]], 1]]]]
+		&& getColor[chessboard[[location[[2]], location[[1]], 1]]] == getColor[piece[[1]]]
+		&& (location[[1]] == 1 || location[[1]] == Length[chessboard] || location[[1]] == 5)
+		&& (location[[2]] == 1 || location[[2]] == Length[chessboard]), Return[True]];
+	If[ToString[chessboard[[location[[2]], location[[1]], 1]]] =!= ToString[0], tests = tests && getColor[chessboard[[location[[2]], location[[1]], 1]]] =!= color];
 	Return[tests]
 )
 
@@ -249,34 +261,35 @@ moveQueen[queen_, x_, y_] := (
 
 (* Castling goes here. Please, use the isUnderAttack method for detection.
 Piece can be a Rook or King !
+Castling cant be performed if one of the locations between the king and the rook is currently attacked (including king and rook)
 You can add the locations returned by this function with an Intersection, directly in the moveRook and moveKing methods *)
-getCastlingLocations[piece_] := (
-	If[piece[[1]] =!= 0 && getType[piece[[1]]] == 5 || getType[piece[[1]]] == 1, (
+getCastlingLocations[piece_, verifyAttack_:True] := (
+	If[piece[[1]] =!= 0 && (getType[piece[[1]]] == 5 || getType[piece[[1]]] == 1), (
 		(* The piece is a rook or a king *)
-		If[BooleanQ[piece[[3]]] && !piece[[3]], (
+		If[BooleanQ[piece[[3]]] && !piece[[3]] && If[verifyAttack, !isUnderAttack[piece], True], (
 			(* The piece has never moved *)
 			If[piece[[2, 1]] == 1, (
-				If[getType[chessboard[[piece[[2, 2]], 5, 1]]] == 5 && chessboard[[piece[[2, 2]], 5, 3]] == False, (
+				If[getType[chessboard[[piece[[2, 2]], 5, 1]]] == 5 && chessboard[[piece[[2, 2]], 5, 3]] == False && If[verifyAttack, !isUnderAttack[chessboard[[piece[[2, 2]], 5]]], True], (
 					auth = True;
-					Table[If[chessboard[[piece[[2, 2]], i, 1]] =!= 0 || isUnderAttack[chessboard[[piece[[2, 2]], i]], True], auth = False], {i, 2, 4}];
+					Table[If[chessboard[[piece[[2, 2]], i, 1]] =!= 0 || isUnderAttack[chessboard[[piece[[2, 2]], i]], getColor[piece[[1]]]], auth = False], {i, 2, 4}];
 					If[auth, Return[{{5, piece[[2, 2]]}}], Return[{}]]
 				), Return[{}]]
 			), If[piece[[2, 1]] == Length[chessboard], (
-				If[getType[chessboard[[piece[[2, 2]], 5, 1]]] == 5 && chessboard[[piece[[2, 2]], 5, 3]] == False, (
+				If[getType[chessboard[[piece[[2, 2]], 5, 1]]] == 5 && chessboard[[piece[[2, 2]], 5, 3]] == False && If[verifyAttack, !isUnderAttack[chessboard[[piece[[2, 2]], 5]]], True], (
 					auth = True;
-					Table[If[chessboard[[piece[[2, 2]], Length[chessboard] - i, 1]] =!= 0 || isUnderAttack[chessboard[[piece[[2, 2]], Length[chessboard] - i]], True], auth = False], {i, 1, 2}];
+					Table[If[chessboard[[piece[[2, 2]], Length[chessboard] - i, 1]] =!= 0 || isUnderAttack[chessboard[[piece[[2, 2]], Length[chessboard] - i]], getColor[piece[[1]]]], auth = False], {i, 1, 2}];
 					If[auth, Return[{{5, piece[[2, 2]]}}], Return[{}]]
 				), Return[{}]]
 			), (
 				resultList = {};
-				If[getType[chessboard[[piece[[2, 2]], 1, 1]]] == 1 && Length[chessboard[[piece[[2, 2]], 1]]] >= 3 && chessboard[[piece[[2, 2]], 1, 3]] == False, (
+				If[getType[chessboard[[piece[[2, 2]], 1, 1]]] == 1 && Length[chessboard[[piece[[2, 2]], 1]]] >= 3 && chessboard[[piece[[2, 2]], 1, 3]] == False  && If[verifyAttack, !isUnderAttack[chessboard[[piece[[2, 2]], 1]]], True], (
 					auth = True;
-					Table[If[chessboard[[piece[[2, 2]], i, 1]] =!= 0 || isUnderAttack[chessboard[[piece[[2, 2]], i]], True], auth = False], {i, 2, 4}];
+					Table[If[chessboard[[piece[[2, 2]], i, 1]] =!= 0 || isUnderAttack[chessboard[[piece[[2, 2]], i]], getColor[piece[[1]]]], auth = False], {i, 2, 4}];
 					If[auth, AppendTo[resultList, {1, piece[[2, 2]]}]]
 				)];
-				If[getType[chessboard[[piece[[2, 2]], Length[chessboard], 1]]] == 1 && Length[chessboard[[piece[[2, 2]], Length[chessboard]]]] >= 3 && chessboard[[piece[[2, 2]], Length[chessboard], 3]] == False, (
+				If[getType[chessboard[[piece[[2, 2]], Length[chessboard], 1]]] == 1 && Length[chessboard[[piece[[2, 2]], Length[chessboard]]]] >= 3 && chessboard[[piece[[2, 2]], Length[chessboard], 3]] == False && If[verifyAttack, !isUnderAttack[chessboard[[piece[[2, 2]], Length[chessboard]]]], True], (
 					auth = True;
-					Table[If[chessboard[[piece[[2, 2]], Length[chessboard] - i, 1]] =!= 0 || isUnderAttack[chessboard[[piece[[2, 2]], Length[chessboard] - i]], True], auth = False], {i, 1, 2}];
+					Table[If[chessboard[[piece[[2, 2]], Length[chessboard] - i, 1]] =!= 0 || isUnderAttack[chessboard[[piece[[2, 2]], Length[chessboard] - i]], getColor[piece[[1]]]], auth = False], {i, 1, 2}];
 					If[auth, AppendTo[resultList, {Length[chessboard], piece[[2, 2]]}]]
 				)];
 				Return[resultList];
