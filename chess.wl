@@ -299,12 +299,15 @@ getCastlingLocations[piece_, verifyAttack_:True] := (
 )
 
 (* Here is the promotion : when a pawn reaches the opposite side of the board, he becomes another piece (rook, knight, bishop or queen)
-This function MUST be called in finalizeMove[], NOT IN getMovePossibilities[] *)
+This function MUST be called in finalizeMove[], NOT IN getMovePossibilities[]
+
+Printing text from dialog function prints it in the error console... *)
 promotePawn[pawn_, x_, y_] := (
 
 	(* This function can only be called from promotePawn[...] context *)
 	endPromotion[value_] := (
-		If[value =!= Null && value =!= $Failed && value =!= $Canceled, chessboard[[y, x, 1]] = value]
+		If[value =!= Null && value =!= $Failed && value =!= $Canceled, chessboard[[y, x, 1]] = value];
+		checkCheck[If[getColor[pawn[[1]]] == 0, 1, 0], False];
 	);
 
 	(* Checks whether the pawn is at a side of the board (and its color) or not *)
@@ -323,6 +326,81 @@ promotePawn[pawn_, x_, y_] := (
 		}, Modal->True, WindowTitle-> "Pawn promotion", WindowFrameElements-> Null
 		];
 	)];
+)
+
+
+(* ::Section:: *)
+(*Check and Gameover*)
+
+
+(* This function checks if there is check and will stop the game is necessary
+The printTexts option is kind of hardcoded, indeed it disables text printing when the context is the Promotion Dialog (which prints in the error console...) *)
+checkCheck[playerColor_, printTexts_:True] := (
+	If[isCheck[playerColor], (
+		If[playerColor == 0, (* Color are reversed because the chosen argument (here) is playerColor and not*)
+			checkBlack = True; If[printTexts, Print["Check ! Black player, protect your king !"]],
+			checkWhite = True; If[printTexts, Print["Check ! White player, protect your king !"]]
+		];
+		
+		(* Now checking checkmate *)
+		chessboardForEach[Function[chessboardPiece, (
+			If[getType[chessboardPiece[[1]]] == 5 && getColor[chessboardPiece[[1]]] =!= playerColor, king = chessboardPiece]
+		)]];
+		(* Stops the game if no such king is found *)
+		If[king == Null, running=False;Print["No such king detected... Stopping the game, please restart the package to continue."]];
+		posList = getMovePossibilities[king];
+		If[Length[posList] == 0, (
+			(* There is check and the king can't move *)
+			locs = {};
+			(* Adding all the locations where pieces can go, in order to cancel the check *)
+			chessboardForEach[Function[chessboardPiece, (
+				If[MemberQ[getMovePossibilities[chessboardPiece], king[[2]]] && getColor[chessboardPiece[[1]]] == If[EvenQ[roundNumber], 1, 0], (
+					dtLocs = {};
+					AppendTo[dtLocs, chessboardPiece[[2]]];
+					(* adds all the locations between the king and the ennemy *)
+					ennemyLocs = getMovePossibilities[chessboardPiece];
+					ennemyLocs = Complement[ennemyLocs, {king[[2]]}]; (* removing king location *)
+					diff = {Sign[chessboardPiece[[2, 1]] - king[[2, 1]]], Sign[chessboardPiece[[2, 2]] - king[[2, 2]]]};
+					(* If the location where the ennemy can go is in the same direction as the king, it's added in dtLocs *)
+					Table[If[Sign[ennemyLocs[[i, 1]] - king[[2, 1]]] == diff[[1]] && Sign[ennemyLocs[[i, 2]] - king[[2, 2]]] == diff[[1]], AppendTo[dtLocs, ennemyLocs[[i]]]], {i, 1, Length[ennemyLocs]}];
+					(* Adding all the locs IN A LIST to locs *)
+					AppendTo[locs, dtLocs];
+				)]
+			)]];
+			(* Now, in each list contained in locs, at least one location must be reached in order to cancel the check *)
+			confirmedCheck = False;
+			Table[(
+				If[confirmedCheck, Return[True]];
+				localCheck = True;
+				(* Browsing the Chess in order to find pieces of the same color as the king which can cancel the Check *)
+				Table[(
+					If[!localCheck, Return[False]];
+					Table[(
+						If[getColor[chessboard[[j, i, 1]]] == getColor[king[[1]]] && Length[Intersection[getMovePossibilities[chessboard[[j, i]]], locs[[k]]]] =!= 0, localCheck = False; Return[False]]
+					), {i, 1, Length[chessboard[[1]]]}]
+				), {j, 1, Length[chessboard]}];
+				confirmedCheck = confirmedCheck || localCheck;
+				
+			), {k, 1, Length[locs]}];
+			
+			If[confirmedCheck, (
+				If[printTexts, Print["Checkmate ! Player ", If[getColor[king[[1]]] == 0, "black", "white"], " won !"]];
+				running = False
+			)];
+			
+		)]),
+		(* else clause *)
+		(
+			If[playerColor == 0, checkBlack = False, checkWhite = False];
+			
+			(* Checking if next player can move = StaleMate *)
+			chessList = Flatten[chessboard, 1];
+			isStaleMate = True;
+			Table[If[getColor[chessList[[i, 1]]] == If[EvenQ[roundNumber], 1, 0], If[Length[getMovePossibilities[chessList[[i]]]] =!= 0, isStaleMate=False;Return[True]]], {i, 1, Length[chessList]}];
+			If[isStaleMate, running = False; If[printTexts, Print["StaleMate: Player can't move anymore, the game is draw !"]]]
+		)
+				
+	]
 )
 
 
@@ -347,7 +425,8 @@ Dynamic[roundNumber]
 moveList = {};
 Dynamic[moveList]
 
-(* All the following values are cache for check (True if check) *)
+(* All the following values are cache for check (True if check)
+These values are only updated just before the player's round *)
 checkWhite = False;
 checkBlack = False;
 Dynamic[checkWhite]
@@ -393,71 +472,8 @@ ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({If[running
 		If[finalizeMove[inputCache[[1]], inputCache[[2]]], 
 			roundNumber++;
 			
-			(* Checking Check *)
-			If[isCheck[If[EvenQ[roundNumber], 1, 0]], (
-				If[playerColor == 0, (* Color are reversed because the chosen argument (here) is playerColor and not*)
-					checkBlack = True; Print["Check ! Black player, protect your king !"],
-					checkWhite = True; Print["Check ! White player, protect your king !"]];
-				
-				(* Now checking checkmate *)
-				chessboardForEach[Function[chessboardPiece, (
-					If[getType[chessboardPiece[[1]]] == 5 && getColor[chessboardPiece[[1]]] =!= playerColor, king = chessboardPiece]
-				)]];
-				(* Stops the game if no such king is found *)
-				If[king == Null, running=False;Print["No such king detected... Stopping the game, please restart the package to continue."]];
-				posList = getMovePossibilities[king];
-				If[Length[posList] == 0, (
-					(* There is check and the king can't move *)
-					locs = {};
-					(* Adding all the locations where pieces can go, in order to cancel the check *)
-					chessboardForEach[Function[chessboardPiece, (
-						If[MemberQ[getMovePossibilities[chessboardPiece], king[[2]]] && getColor[chessboardPiece[[1]]] == If[EvenQ[roundNumber], 1, 0], (
-							dtLocs = {};
-							AppendTo[dtLocs, chessboardPiece[[2]]];
-							(* adds all the locations between the king and the ennemy *)
-							ennemyLocs = getMovePossibilities[chessboardPiece];
-							ennemyLocs = Complement[ennemyLocs, {king[[2]]}]; (* removing king location *)
-							diff = {Sign[chessboardPiece[[2, 1]] - king[[2, 1]]], Sign[chessboardPiece[[2, 2]] - king[[2, 2]]]};
-							(* If the location where the ennemy can go is in the same direction as the king, it's added in dtLocs *)
-							Table[If[Sign[ennemyLocs[[i, 1]] - king[[2, 1]]] == diff[[1]] && Sign[ennemyLocs[[i, 2]] - king[[2, 2]]] == diff[[1]], AppendTo[dtLocs, ennemyLocs[[i]]]], {i, 1, Length[ennemyLocs]}];
-							(* Adding all the locs IN A LIST to locs *)
-							AppendTo[locs, dtLocs];
-						)]
-					)]];
-					(* Now, in each list contained in locs, at least one location must be reached in order to cancel the check *)
-					confirmedCheck = False;
-					Table[(
-						If[confirmedCheck, Return[True]];
-						localCheck = True;
-						(* Browsing the Chess in order to find pieces of the same color as the king which can cancel the Check *)
-						Table[(
-							If[!localCheck, Return[False]];
-							Table[(
-								If[getColor[chessboard[[j, i, 1]]] == getColor[king[[1]]] && Length[Intersection[getMovePossibilities[chessboard[[j, i]]], locs[[k]]]] =!= 0, localCheck = False; Return[False]]
-							), {i, 1, Length[chessboard[[1]]]}]
-						), {j, 1, Length[chessboard]}];
-						confirmedCheck = confirmedCheck || localCheck;
-						
-					), {k, 1, Length[locs]}];
-					
-					If[confirmedCheck, (
-						Print["Checkmate ! Player ", If[getColor[king[[1]]] == 0, "black", "white"], " won !"];
-						running = False
-					)];
-					
-				)]),
-				(* else clause *)
-				(
-					If[playerColor == 0, checkBlack = False, checkWhite = False];
-					
-					(* Checking if next player can move = StaleMate *)
-					chessList = Flatten[chessboard, 1];
-					isStaleMate = True;
-					Table[If[getColor[chessList[[i, 1]]] == If[EvenQ[roundNumber], 1, 0], If[Length[getMovePossibilities[chessList[[i]]]] =!= 0, isStaleMate=False;Return[True]]], {i, 1, Length[chessList]}];
-					If[isStaleMate, running = False; Print["StaleMate: Player can't move anymore, the game is draw !"]]
-				)
-				
-			]
+			(* Checking check at the end of each round *)
+			checkCheck[If[EvenQ[roundNumber], 1, 0]];
 		];
 
 		(* Move complete, cleaning cache and lists *)
