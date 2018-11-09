@@ -299,15 +299,13 @@ getCastlingLocations[piece_, verifyAttack_:True] := (
 )
 
 (* Here is the promotion : when a pawn reaches the opposite side of the board, he becomes another piece (rook, knight, bishop or queen)
-This function MUST be called in finalizeMove[], NOT IN getMovePossibilities[]
-
-Printing text from dialog function prints it in the error console... *)
+This function MUST be called in finalizeMove[], NOT IN getMovePossibilities[] *)
 promotePawn[pawn_, x_, y_] := (
 
 	(* This function can only be called from promotePawn[...] context *)
 	endPromotion[value_] := (
 		If[value =!= Null && value =!= $Failed && value =!= $Canceled, chessboard[[y, x, 1]] = value];
-		checkCheck[If[getColor[pawn[[1]]] == 0, 1, 0], False];
+		checkCheck[If[getColor[pawn[[1]]] == 0, 1, 0]];
 	);
 
 	(* Checks whether the pawn is at a side of the board (and its color) or not *)
@@ -333,13 +331,13 @@ promotePawn[pawn_, x_, y_] := (
 (*Check and Gameover*)
 
 
-(* This function checks if there is check and will stop the game is necessary
-The printTexts option is kind of hardcoded, indeed it disables text printing when the context is the Promotion Dialog (which prints in the error console...) *)
-checkCheck[playerColor_, printTexts_:True] := (
+(* This function checks if there is check and will stop the game is necessary *)
+checkCheck[playerColor_] := (
+	displayedCheck = "";
 	If[isCheck[playerColor], (
-		If[playerColor == 0, (* Color are reversed because the chosen argument (here) is playerColor and not*)
-			checkBlack = True; If[printTexts, Print["Check ! Black player, protect your king !"]],
-			checkWhite = True; If[printTexts, Print["Check ! White player, protect your king !"]]
+		If[playerColor == 0,
+			checkWhite = True,
+			checkBlack = True
 		];
 		
 		(* Now checking checkmate *)
@@ -347,7 +345,7 @@ checkCheck[playerColor_, printTexts_:True] := (
 			If[getType[chessboardPiece[[1]]] == 5 && getColor[chessboardPiece[[1]]] =!= playerColor, king = chessboardPiece]
 		)]];
 		(* Stops the game if no such king is found *)
-		If[king == Null, running=False;Print["No such king detected... Stopping the game, please restart the package to continue."]];
+		If[king == Null, running=False; displayedCheck = "No such king detected... Stopping the game, please restart the package to continue."];
 		posList = getMovePossibilities[king];
 		If[Length[posList] == 0, (
 			(* There is check and the king can't move *)
@@ -384,23 +382,33 @@ checkCheck[playerColor_, printTexts_:True] := (
 			), {k, 1, Length[locs]}];
 			
 			If[confirmedCheck, (
-				If[printTexts, Print["Checkmate ! Player ", If[getColor[king[[1]]] == 0, "black", "white"], " won !"]];
+				displayedCheck = StringJoin["Checkmate ! ", If[getColor[king[[1]]] == 0, "Black", "White"], " player won !"];
 				running = False
 			)];
 			
 		)]),
 		(* else clause *)
 		(
-			If[playerColor == 0, checkBlack = False, checkWhite = False];
+			If[playerColor == 0, checkWhite = False, checkBlack = False];
 			
 			(* Checking if next player can move = StaleMate *)
 			chessList = Flatten[chessboard, 1];
 			isStaleMate = True;
 			Table[If[getColor[chessList[[i, 1]]] == If[EvenQ[roundNumber], 1, 0], If[Length[getMovePossibilities[chessList[[i]]]] =!= 0, isStaleMate=False;Return[True]]], {i, 1, Length[chessList]}];
-			If[isStaleMate, running = False; If[printTexts, Print["StaleMate: Player can't move anymore, the game is draw !"]]]
+			If[isStaleMate, running = False; displayedCheck = "StaleMate: Player can't move anymore, the game is draw !"]
 		)
 				
+	];
+	
+	(* Using Dynamic variables instead of Print to prevent mathematica's error console opening *)
+	If[displayedCheck == "", 
+		If[checkWhite, displayedCheck = "Check ! White player, protect your king !"];
+		If[checkBlack, (
+			If[displayedCheck =!= "", displayedCheck = StringJoin[displayedCheck, "\n"]];
+			displayedCheck = StringJoin[displayedCheck, "Check ! Black player, protect your king !"]
+		)]
 	]
+	
 )
 
 
@@ -429,8 +437,9 @@ Dynamic[moveList]
 These values are only updated just before the player's round *)
 checkWhite = False;
 checkBlack = False;
-Dynamic[checkWhite]
-Dynamic[checkBlack]
+
+displayedCheck = "";
+Dynamic[displayedCheck]
 
 (* The latest move information :
 the first element of the list is the piece (as string),
@@ -483,6 +492,3 @@ ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({If[running
 	})]
 
 }] (* End of is running check *)})&]
-
-
-
