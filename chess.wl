@@ -360,7 +360,7 @@ checkCheck[playerColor_] := (
 					ennemyLocs = Complement[ennemyLocs, {king[[2]]}]; (* removing king location *)
 					diff = {Sign[chessboardPiece[[2, 1]] - king[[2, 1]]], Sign[chessboardPiece[[2, 2]] - king[[2, 2]]]};
 					(* If the location where the ennemy can go is in the same direction as the king, it's added in dtLocs *)
-					Table[If[Sign[ennemyLocs[[i, 1]] - king[[2, 1]]] == diff[[1]] && Sign[ennemyLocs[[i, 2]] - king[[2, 2]]] == diff[[1]], AppendTo[dtLocs, ennemyLocs[[i]]]], {i, 1, Length[ennemyLocs]}];
+					Table[If[Sign[ennemyLocs[[i, 1]] - king[[2, 1]]] == diff[[1]] && Sign[ennemyLocs[[i, 2]] - king[[2, 2]]] == diff[[2]], AppendTo[dtLocs, ennemyLocs[[i]]]], {i, 1, Length[ennemyLocs]}];
 					(* Adding all the locs IN A LIST to locs *)
 					AppendTo[locs, dtLocs];
 				)]
