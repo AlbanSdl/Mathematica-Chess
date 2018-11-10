@@ -36,6 +36,9 @@ getColor[x_Integer]:=Return[-1]
 (* Returns the inversed color (see getColor for more information) *)
 getInversedColor[x_Integer]:=If[x == 0, Return[1], If[x == 1, Return[0], Return[-1]]]
 
+(* Returns a string corresponding to the color id *)
+getColorName[x_Integer]:=If[x==0, Return["White"], If[x==1, Return["Black"], Return["Undefined"]]]
+
 (* Returns an Integer, corresponding to the piece's type:
 	-1 is undefined (empty location)
 	0 is a pawn
@@ -425,15 +428,12 @@ running = True;
 
 (* A list which keeps the latest click position (converted in location in chessboard *)
 inputCache = {};
-Dynamic[inputCache]
 
 (* The number of the round. If the round number is even, black player has to play *)
 roundNumber = 1;
-Dynamic[roundNumber]
 
 (* This list contains all the locations where the selected piece can go. It's used in order to color locations in green with mouseover*)
 moveList = {};
-Dynamic[moveList]
 
 (* All the following values are cache for check (True if check)
 These values are only updated just before the player's round *)
@@ -441,7 +441,6 @@ checkWhite = False;
 checkBlack = False;
 
 displayedCheck = "";
-Dynamic[displayedCheck]
 
 (* The latest move information :
 the first element of the list is the piece (as string),
@@ -462,11 +461,24 @@ Pieces=Dynamic[
 ];
 (* The clickpane detects all the clicks and will convert the coordinates to locations in the matrix 'chessboard'. All the methods are called from here 
 The variable running defined above, will stop the clickpane detection is set to False *)
-ClickPane[Dynamic@Graphics[{EdgeForm[{Thin,Black}], Board, Pieces}],({If[running, {
+ClickPane[Dynamic@Graphics[{
+		EdgeForm[{Thin,Black}],
+		Board,
+		Pieces
+	},
+	PlotLabel->Style[
+		StringJoin[
+			If[running, StringJoin[getColorName[If[EvenQ[roundNumber], 1, 0]], " player has to play"], "Game has ended !"],
+			"\n", displayedCheck
+		],
+		FontSize->18
+	]],({If[running, {
 
 	(* Current Player *)
 	playerColor = If[EvenQ[roundNumber], 1, 0];
 	
+	(* Checking if click is on the board,  to prevent from crashes *)
+	If[Ceiling[#][[1]] > Length[chessboard] || Ceiling[#][[2]] > Length[chessboard] || Ceiling[#][[1]] < 1 || Ceiling[#][[2]] < 1, Return[False]];
 	(* Moves pieces *)
 	If[Length[inputCache] == 0 && getColor[chessboard[[Ceiling[#][[2]], Ceiling[#][[1]], 1]]] =!= playerColor, Return[False]];
 	AppendTo[inputCache, Ceiling[#]];
