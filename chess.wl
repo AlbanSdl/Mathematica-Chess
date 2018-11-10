@@ -33,6 +33,9 @@ The proper method requires a string (piece char) in order to work. The second me
 getColor[x_String:"\[WhitePawn]"]:= If[("\[WhiteKing]" == x || "\[WhiteQueen]" == x || "\[WhiteKnight]" == x|| "\[WhiteBishop]" == x|| "\[WhiteRook]" == x|| "\[WhitePawn]" == x), 0, If[("\[BlackKing]" == x || "\[BlackQueen]" == x || "\[BlackKnight]" == x|| "\[BlackBishop]" == x|| "\[BlackRook]" == x|| "\[BlackPawn]" == x), 1, -1]]
 getColor[x_Integer]:=Return[-1]
 
+(* Returns the inversed color (see getColor for more information) *)
+getInversedColor[x_Integer]:=If[x == 0, Return[1], If[x == 1, Return[0], Return[-1]]]
+
 (* Returns an Integer, corresponding to the piece's type:
 	-1 is undefined (empty location)
 	0 is a pawn
@@ -342,7 +345,7 @@ checkCheck[playerColor_] := (
 		
 		(* Now checking checkmate *)
 		chessboardForEach[Function[chessboardPiece, (
-			If[getType[chessboardPiece[[1]]] == 5 && getColor[chessboardPiece[[1]]] =!= playerColor, king = chessboardPiece]
+			If[getType[chessboardPiece[[1]]] == 5 && getColor[chessboardPiece[[1]]] == playerColor, king = chessboardPiece]
 		)]];
 		(* Stops the game if no such king is found *)
 		If[king == Null, running=False; displayedCheck = "No such king detected... Stopping the game, please restart the package to continue."];
@@ -352,7 +355,7 @@ checkCheck[playerColor_] := (
 			locs = {};
 			(* Adding all the locations where pieces can go, in order to cancel the check *)
 			chessboardForEach[Function[chessboardPiece, (
-				If[MemberQ[getMovePossibilities[chessboardPiece], king[[2]]] && getColor[chessboardPiece[[1]]] == If[EvenQ[roundNumber], 1, 0], (
+				If[MemberQ[getMovePossibilities[chessboardPiece], king[[2]]] && getColor[chessboardPiece[[1]]] == getInversedColor[getColor[king[[1]]]], (
 					dtLocs = {};
 					AppendTo[dtLocs, chessboardPiece[[2]]];
 					(* adds all the locations between the king and the ennemy *)
@@ -360,7 +363,7 @@ checkCheck[playerColor_] := (
 					ennemyLocs = Complement[ennemyLocs, {king[[2]]}]; (* removing king location *)
 					diff = {Sign[chessboardPiece[[2, 1]] - king[[2, 1]]], Sign[chessboardPiece[[2, 2]] - king[[2, 2]]]};
 					(* If the location where the ennemy can go is in the same direction as the king, it's added in dtLocs *)
-					Table[If[Sign[ennemyLocs[[i, 1]] - king[[2, 1]]] == diff[[1]] && Sign[ennemyLocs[[i, 2]] - king[[2, 2]]] == diff[[2]], AppendTo[dtLocs, ennemyLocs[[i]]]], {i, 1, Length[ennemyLocs]}];
+					Table[If[Sign[chessboardPiece[[2, 1]] - ennemyLocs[[i, 1]]] == diff[[1]] && Sign[chessboardPiece[[2, 2]] - ennemyLocs[[i, 2]]] == diff[[2]], AppendTo[dtLocs, ennemyLocs[[i]]]], {i, 1, Length[ennemyLocs]}];
 					(* Adding all the locs IN A LIST to locs *)
 					AppendTo[locs, dtLocs];
 				)]
@@ -378,7 +381,6 @@ checkCheck[playerColor_] := (
 					), {i, 1, Length[chessboard[[1]]]}]
 				), {j, 1, Length[chessboard]}];
 				confirmedCheck = confirmedCheck || localCheck;
-				
 			), {k, 1, Length[locs]}];
 			
 			If[confirmedCheck, (
