@@ -8,6 +8,15 @@
 (*Basic Structure and Utils*)
 
 
+(* ----- Versionning -----
+Version code corresponds to the code of the current version.
+In order to get the code of a new version, just increment VERSIONCODE of 1 
+VERSIONCODE can be used in external code or modifications in order to check if the current version supports a given feature.
+E.g. Use If[VERSIONCODE \[GreaterEqual] 20, (* do this if the feature is supported *), (* execute this instead *)] *)
+GAMEVERSIONCODE = 1;
+GAMEVERSION = "0.0.1";
+GAMENAME = "MathematicaChess";
+
 (* Here is the board: x \[Rule] this direction and y in the other direction
 This is the basic structure of a piece 
 r\[Rule] {"\[WhiteKing]", {x, y}, False}
@@ -461,6 +470,9 @@ Pieces=Dynamic[
 ];
 (* The clickpane detects all the clicks and will convert the coordinates to locations in the matrix 'chessboard'. All the methods are called from here 
 The variable running defined above, will stop the clickpane detection is set to False *)
+
+Manipulate[
+
 ClickPane[Dynamic@Graphics[{
 		EdgeForm[{Thin,Black}],
 		Board,
@@ -505,4 +517,12 @@ ClickPane[Dynamic@Graphics[{
 		
 	})]
 
-}] (* End of is running check *)})&]
+}] (* End of is running check *)})&],
+
+	(* Game settings are set here, in the manipulate
+	All settings must be disabled when roundNumber is not 1.
+	Use Enabled\[Rule]Dynamic[roundNumber \[Equal] 1 < && ... >] *)
+	{{playerAmount, "Multiplayer", "Game Type"}, {"Singleplayer", "Multiplayer"}, Enabled->Dynamic[roundNumber == 1]},
+	{{difficulty, "normal", "Difficulty (singleplayer)"}, {"easy", "normal", "hard"}, ControlType->PopupMenu, Enabled->Dynamic[playerAmount == "Singleplayer" && roundNumber == 1]},
+	FrameLabel->{"", "", StringJoin[GAMENAME, " ", GAMEVERSION, "\nSettings are not fully implemented yet"], ""}
+]
