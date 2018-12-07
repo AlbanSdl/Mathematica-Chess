@@ -19,8 +19,8 @@ The License of the package (and all this git's content) can be found [here](LICE
 
 ## About Oxford WLAS18 ##
 Here is the list of all projects which has been done :
-- Chess Game
-- Tetris Game
+- [Chess Game](#)
+- [Tetris Game](https://github.com/FIRMINI/Tetris-game-Mathematica-)
 - Tracking Hugogo (Video to Stickman Graph converter)
 - Disease propagation in an hospital
 - Reducing CO2 emission in the USA

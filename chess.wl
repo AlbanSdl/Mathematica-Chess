@@ -17,10 +17,10 @@ The pawn is associated to the matching unicode character,
 chessboard= {
 	{{"\[WhiteRook]",{1,1},False},{"\[WhiteKnight]",{2,1},False},{"\[WhiteBishop]",{3,1},False},{"\[WhiteQueen]",{4,1},False},{"\[WhiteKing]",{5,1},False},{"\[WhiteBishop]",{6,1},False},{"\[WhiteKnight]",{7,1},False},{"\[WhiteRook]",{8,1},False}},
 	{{"\[WhitePawn]",{1,2},False},{"\[WhitePawn]",{2,2},False},{"\[WhitePawn]",{3,2},False},{"\[WhitePawn]",{4,2},False},{"\[WhitePawn]",{5,2},False},{"\[WhitePawn]",{6,2},False},{"\[WhitePawn]",{7,2},False},{"\[WhitePawn]",{8,2},False}},
-	{{0,{1,3}}, {0,{2,3}},{0,{3,3}}, {0,{4,3}}, {0,{5,3}}, {0,{6,3}}, {0,{7,3}}, {0,{8,3}}},
-	{{0,{1,4}}, {0,{2,4}}, {0,{3,3}},{0,{4,4}}, {0,{5,4}}, {0,{6,4}}, {0,{7,4}}, {0,{8,4}}},
-	{{0,{1,5}}, {0,{2,5}}, {0,{3,3}},{0,{4,5}}, {0,{5,5}}, {0,{6,5}}, {0,{7,5}}, {0,{8,5}}},
-	{{0,{1,6}}, {0,{2,6}},{0,{3,3}}, {0,{4,6}}, {0,{5,6}}, {0,{6,6}}, {0,{7,6}}, {0,{8,6}}},
+	{{0,{1,3}}, {0,{2,3}}, {0,{3,3}}, {0,{4,3}}, {0,{5,3}}, {0,{6,3}}, {0,{7,3}}, {0,{8,3}}},
+	{{0,{1,4}}, {0,{2,4}}, {0,{3,4}}, {0,{4,4}}, {0,{5,4}}, {0,{6,4}}, {0,{7,4}}, {0,{8,4}}},
+	{{0,{1,5}}, {0,{2,5}}, {0,{3,5}}, {0,{4,5}}, {0,{5,5}}, {0,{6,5}}, {0,{7,5}}, {0,{8,5}}},
+	{{0,{1,6}}, {0,{2,6}}, {0,{3,6}}, {0,{4,6}}, {0,{5,6}}, {0,{6,6}}, {0,{7,6}}, {0,{8,6}}},
 	{{"\[BlackPawn]",{1,7},False},{"\[BlackPawn]",{2,7},False},{"\[BlackPawn]",{3,7},False},{"\[BlackPawn]",{4,7},False},{"\[BlackPawn]",{5,7},False},{"\[BlackPawn]",{6,7},False},{"\[BlackPawn]",{7,7},False},{"\[BlackPawn]",{8,7},False}},
 	{{"\[BlackRook]",{1,8},False},{"\[BlackKnight]",{2,8},False},{"\[BlackBishop]",{3,8},False},{"\[BlackQueen]",{4,8},False},{"\[BlackKing]",{5,8},False},{"\[BlackBishop]",{6,8},False},{"\[BlackKnight]",{7,8},False},{"\[BlackRook]",{8,8},False}}
 };
@@ -197,17 +197,18 @@ moveKing[king_, x_, y_, ignoreOthers_:False]:=(
 (* This method returns all the possibilities for Bishop's moves
 The Bishop argument can be null *)
 moveBishop[bishop_, x_, y_]:=(
-	list = {};
-	Table[Table[If[(i ==x + Abs[j -y]) ||(i ==x - Abs[j - y]), AppendTo[list,{i, j}]], {i, 1, Length[chessboard[[j]]]}], {j, 1, Length[chessboard]}];
+	list = Join[Diagonal[chessboard, x - y], Diagonal[Reverse @ chessboard, x + y - Length[chessboard] - 1]];
+	(* retrieves all the locations where the piece can move. This way to compute is faster than iterating the whole chessboard.
+	Creating a copy of this list is used in order to be able to remove values during the iteration *)
 	nlist = list;
 	Table[(
-		If[(piece=chessboard[[list[[i, 2]], list[[i, 1]]]])[[1]] =!= 0 && bishop[[2]] =!= list[[i]], (
-			Delete[list, Position[list,piece]];
-			direction = {Sign[x - list[[i, 1]]], Sign[y - list[[i, 2]]]};
-			nlist = Intersection[nlist, DeleteCases[list, Alternatives @@ Select[list,  Sign[list[[i, 1]] - #[[1]]] == direction[[1]] && Sign[list[[i, 2]] - #[[2]]] == direction[[2]]&]]];
+		If[(piece=chessboard[[list[[i, 2, 2]], list[[i, 2, 1]]]])[[1]] =!= 0 && bishop[[2]] =!= list[[i, 2]], (
+			Delete[list, Position[list, piece]];
+			direction = {Sign[x - list[[i, 2, 1]]], Sign[y - list[[i, 2, 2]]]};
+			nlist = Intersection[nlist, Complement[list, Select[list,  Sign[list[[i, 2, 1]] - #[[2, 1]]] == direction[[1]] && Sign[list[[i, 2, 2]] - #[[2, 2]]] == direction[[2]]&]]];
 		)]
 	), {i, 1, Length[list]}];
-	Return[nlist]
+	Return[nlist[[;;,2]]]
 )
 
 (* This method returns all the possibilities for Knight's moves 
